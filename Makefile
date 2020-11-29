@@ -103,38 +103,38 @@ else
 CUDA_LFLAGS = -L$(CUDAROOT)/lib64
 endif
 
-CUDA_LFLAGS += -Llib -lcudart -lcutt
+CUDA_LFLAGS += -Lcutt/lib -lcudart -lcutt
 ifdef ENABLE_NVTOOLS
 CUDA_LFLAGS += -lnvToolsExt
 endif
 
-all: create_build lib/libcutt.a bin/cutt_test bin/cutt_bench
+all: create_build cutt/lib/libcutt.a cutt/bin/cutt_test cutt/bin/cutt_bench
 
 create_build:
 	mkdir -p build
 
-lib/libcutt.a: $(OBJSLIB)
-	mkdir -p lib
-	rm -f lib/libcutt.a
-	ar -cvq lib/libcutt.a $(OBJSLIB)
-	mkdir -p include
-	cp -f src/cutt.h include/cutt.h
+cutt/lib/libcutt.a: $(OBJSLIB)
+	mkdir -p cutt/lib
+	rm -f cutt/lib/libcutt.a
+	ar -cvq cutt/lib/libcutt.a $(OBJSLIB)
+	mkdir -p cutt/include
+	cp -f src/cutt.h cutt/include/cutt.h
 
-bin/cutt_test : lib/libcutt.a $(OBJSTEST)
-	mkdir -p bin
-	$(CC) -o bin/cutt_test $(OBJSTEST) $(CUDA_LFLAGS)
+cutt/bin/cutt_test : cutt/lib/libcutt.a $(OBJSTEST)
+	mkdir -p cutt/bin
+	$(CC) -o cutt/bin/cutt_test $(OBJSTEST) $(CUDA_LFLAGS)
 
-bin/cutt_bench : lib/libcutt.a $(OBJSBENCH)
-	mkdir -p bin
-	$(CC) -o bin/cutt_bench $(OBJSBENCH) $(CUDA_LFLAGS)
+cutt/bin/cutt_bench : cutt/lib/libcutt.a $(OBJSBENCH)
+	mkdir -p cutt/bin
+	$(CC) -o cutt/bin/cutt_bench $(OBJSBENCH) $(CUDA_LFLAGS)
 
 clean: 
 	rm -f $(OBJS)
 	rm -f build/*.d
 	rm -f *~
-	rm -f lib/libcutt.a
-	rm -f bin/cutt_test
-	rm -f bin/cutt_bench
+	rm -f cutt/lib/libcutt.a
+	rm -f cutt/bin/cutt_test
+	rm -f cutt/bin/cutt_bench
 
 # Pull in dependencies that already exist
 -include $(OBJS:.o=.d)
