@@ -576,7 +576,7 @@ int getNumActiveBlock(const int method, const int sizeofType, const LaunchConfig
   cudaOccupancyMaxActiveBlocksPerMultiprocessor(&numActiveBlock, \
     transposePacked<TYPE, NREG>, numthread, lc.shmemsize)
       switch(lc.numRegStorage) {
-#define CALL(ICASE) case ICASE: if (sizeofType == 4) CALL0(float,  ICASE); if (sizeofType == 8) CALL0(double, ICASE); break
+#define CALL(ICASE) case ICASE: if (sizeofType == 4) CALL0(float,  ICASE); if (sizeofType == 8) CALL0(double, ICASE); if (sizeofType == 16) CALL0(double2, ICASE); break
 #include "calls.h"
       }
 #undef CALL
@@ -612,7 +612,7 @@ int getNumActiveBlock(const int method, const int sizeofType, const LaunchConfig
   cudaOccupancyMaxActiveBlocksPerMultiprocessor(&numActiveBlock, \
     transposePackedSplit<TYPE, NREG>, numthread, lc.shmemsize)
       switch(lc.numRegStorage) {
-#define CALL(ICASE) case ICASE: if (sizeofType == 4) CALL0(float,  ICASE); if (sizeofType == 8) CALL0(double, ICASE); break
+#define CALL(ICASE) case ICASE: if (sizeofType == 4) CALL0(float,  ICASE); if (sizeofType == 8) CALL0(double, ICASE); if (sizeofType == 16) CALL0(double2, ICASE); break
 #include "calls.h"
       }
 #undef CALL
@@ -627,9 +627,12 @@ int getNumActiveBlock(const int method, const int sizeofType, const LaunchConfig
       if (sizeofType == 4) {
         cudaOccupancyMaxActiveBlocksPerMultiprocessor(&numActiveBlock,
           transposeTiled<float>, numthread, lc.shmemsize);
-      } else {
+      } else if (sizeofType == 8) {
         cudaOccupancyMaxActiveBlocksPerMultiprocessor(&numActiveBlock,
           transposeTiled<double>, numthread, lc.shmemsize);
+      } else {
+        cudaOccupancyMaxActiveBlocksPerMultiprocessor(&numActiveBlock,
+          transposeTiled<double2>, numthread, lc.shmemsize);
       }
     }
     break;
@@ -639,9 +642,12 @@ int getNumActiveBlock(const int method, const int sizeofType, const LaunchConfig
       if (sizeofType == 4) {
         cudaOccupancyMaxActiveBlocksPerMultiprocessor(&numActiveBlock,
           transposeTiledCopy<float>, numthread, lc.shmemsize);
-      } else {
+      } else if (sizeofType == 8) {
         cudaOccupancyMaxActiveBlocksPerMultiprocessor(&numActiveBlock,
           transposeTiledCopy<double>, numthread, lc.shmemsize);
+      } else {
+        cudaOccupancyMaxActiveBlocksPerMultiprocessor(&numActiveBlock,
+          transposeTiledCopy<double2>, numthread, lc.shmemsize);
       }
     }
     break;
@@ -857,7 +863,7 @@ bool cuttKernel(cuttPlan_t& plan, void* dataIn, void* dataOut) {
     transposePacked<TYPE, NREG> <<< lc.numblock, lc.numthread, lc.shmemsize, plan.stream >>> \
       (ts.volMmk, ts.volMbar, ts.sizeMmk, ts.sizeMbar, \
       plan.Mmk, plan.Mbar, plan.Msh, (TYPE *)dataIn, (TYPE *)dataOut)
-#define CALL(ICASE) case ICASE: if (plan.sizeofType == 4) CALL0(float,  ICASE); if (plan.sizeofType == 8) CALL0(double, ICASE); break
+#define CALL(ICASE) case ICASE: if (plan.sizeofType == 4) CALL0(float,  ICASE); if (plan.sizeofType == 8) CALL0(double, ICASE); if (plan.sizeofType == 16) CALL0(double2, ICASE); break
 #include "calls.h"
         default:
         printf("cuttKernel no template implemented for numRegStorage %d\n", lc.numRegStorage);
@@ -876,7 +882,7 @@ bool cuttKernel(cuttPlan_t& plan, void* dataIn, void* dataOut) {
     transposePackedSplit<TYPE, NREG> <<< lc.numblock, lc.numthread, lc.shmemsize, plan.stream >>> \
       (ts.splitDim, ts.volMmkUnsplit, ts. volMbar, ts.sizeMmk, ts.sizeMbar, \
         plan.cuDimMm, plan.cuDimMk, plan.Mmk, plan.Mbar, plan.Msh, (TYPE *)dataIn, (TYPE *)dataOut)
-#define CALL(ICASE) case ICASE: if (plan.sizeofType == 4) CALL0(float,  ICASE); if (plan.sizeofType == 8) CALL0(double, ICASE); break
+#define CALL(ICASE) case ICASE: if (plan.sizeofType == 4) CALL0(float,  ICASE); if (plan.sizeofType == 8) CALL0(double, ICASE); if (plan.sizeofType == 16) CALL0(double2, ICASE); break
 #include "calls.h"
         default:
         printf("cuttKernel no template implemented for numRegStorage %d\n", lc.numRegStorage);
@@ -896,6 +902,7 @@ bool cuttKernel(cuttPlan_t& plan, void* dataIn, void* dataOut) {
         plan.Mbar, (TYPE *)dataIn, (TYPE *)dataOut)
       if (plan.sizeofType == 4) CALL(float);
       if (plan.sizeofType == 8) CALL(double);
+      if (plan.sizeofType == 16) CALL(double2);
 #undef CALL
     }
     break;
@@ -908,6 +915,7 @@ bool cuttKernel(cuttPlan_t& plan, void* dataIn, void* dataOut) {
         plan.Mbar, (TYPE *)dataIn, (TYPE *)dataOut)
       if (plan.sizeofType == 4) CALL(float);
       if (plan.sizeofType == 8) CALL(double);
+      if (plan.sizeofType == 16) CALL(double2);
 #undef CALL
     }
     break;
