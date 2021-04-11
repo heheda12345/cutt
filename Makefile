@@ -90,6 +90,8 @@ OBJS = $(OBJSLIB) $(OBJSTEST) $(OBJSBENCH)
 #CUDAROOT = $(subst /bin/,,$(dir $(shell which nvcc)))
 CUDAROOT = $(subst /bin/,,$(dir $(shell which $(CUDAC))))
 
+OMP_FLAGS = -fopenmp
+
 CFLAGS = -I${CUDAROOT}/include -std=c++11 $(DEFS) $(OPTLEV)
 ifeq ($(CPU),x86_64)
 CFLAGS += -march=native
@@ -122,11 +124,11 @@ cutt/lib/libcutt.a: $(OBJSLIB)
 
 cutt/bin/cutt_test : cutt/lib/libcutt.a $(OBJSTEST)
 	mkdir -p cutt/bin
-	$(CC) -o cutt/bin/cutt_test $(OBJSTEST) $(CUDA_LFLAGS)
+	$(CC) -o cutt/bin/cutt_test $(OBJSTEST) $(CUDA_LFLAGS) $(OMP_FLAGS)
 
 cutt/bin/cutt_bench : cutt/lib/libcutt.a $(OBJSBENCH)
 	mkdir -p cutt/bin
-	$(CC) -o cutt/bin/cutt_bench $(OBJSBENCH) $(CUDA_LFLAGS)
+	$(CC) -o cutt/bin/cutt_bench $(OBJSBENCH) $(CUDA_LFLAGS) $(OMP_FLAGS)
 
 clean: 
 	rm -f $(OBJS)
@@ -145,6 +147,6 @@ build/%.o : src/%.cu
 	$(CUDAC) -M $(CUDA_CFLAGS) $< >> build/$*.d
 
 build/%.o : src/%.cpp
-	$(CC) -c $(CFLAGS) -o build/$*.o $<
+	$(CC) -c $(CFLAGS) $(OMP_FLAGS) -o build/$*.o $<
 	echo -e 'build/\c' > build/$*.d
-	$(CC) -M $(CFLAGS) $< >> build/$*.d
+	$(CC) -M $(CFLAGS) $(OMP_FLAGS) $< >> build/$*.d

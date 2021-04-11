@@ -40,6 +40,9 @@ typedef enum cuttResult_t {
   CUTT_UNDEFINED_ERROR,    // Undefined error
 } cuttResult;
 
+// Call once for each CPU process
+cuttResult cuttInit();
+
 //
 // Create plan
 //

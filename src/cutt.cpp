@@ -41,19 +41,50 @@ static cuttHandle curHandle = 0;
 // Table of devices that have been initialized
 static std::unordered_map<int, cudaDeviceProp> deviceProps;
 
+#ifdef _OPENMP
+#include <omp.h>
+omp_lock_t lockPlanStorage;
+omp_lock_t lockCurHandle;
+omp_lock_t lockDeviceProps;
+#endif
+
+cuttResult cuttInit() {
+#ifdef _OPENMP
+  omp_init_lock(&lockPlanStorage);
+  omp_init_lock(&lockCurHandle);
+  omp_init_lock(&lockDeviceProps);
+#endif
+  return CUTT_SUCCESS;
+}
+
 // Checks prepares device if it's not ready yet and returns device properties
 // Also sets shared memory configuration
 void getDeviceProp(int& deviceID, cudaDeviceProp &prop) {
+#ifdef _OPENMP
+  omp_set_lock(&lockCurHandle);
   cudaCheck(cudaGetDevice(&deviceID));
   auto it = deviceProps.find(deviceID);
   if (it == deviceProps.end()) {
     // Get device properties and store it for later use
     cudaCheck(cudaGetDeviceProperties(&prop, deviceID));
-    cuttKernelSetSharedMemConfig();
+    // cuttKernelSetSharedMemConfig();
     deviceProps.insert({deviceID, prop});
   } else {
     prop = it->second;
   }
+  omp_unset_lock(&lockCurHandle);
+#else
+  cudaCheck(cudaGetDevice(&deviceID));
+  auto it = deviceProps.find(deviceID);
+  if (it == deviceProps.end()) {
+    // Get device properties and store it for later use
+    cudaCheck(cudaGetDeviceProperties(&prop, deviceID));
+    // cuttKernelSetSharedMemConfig();
+    deviceProps.insert({deviceID, prop});
+  } else {
+    prop = it->second;
+  }
+#endif
 }
 
 cuttResult cuttPlanCheckInput(int rank, int* dim, int* permutation, size_t sizeofType) {
@@ -92,12 +123,24 @@ cuttResult cuttPlan(cuttHandle* handle, int rank, int* dim, int* permutation, si
   cuttResult inpCheck = cuttPlanCheckInput(rank, dim, permutation, sizeofType);
   if (inpCheck != CUTT_SUCCESS) return inpCheck;
 
+#ifdef _OPENMP
+  omp_set_lock(&lockCurHandle);
   // Create new handle
   *handle = curHandle;
   curHandle++;
-
+  // Check that the current handle is available (it better be!)
+  omp_unset_lock(&lockCurHandle);
+  omp_set_lock(&lockPlanStorage);
+  size_t count = planStorage.count(*handle);
+  omp_unset_lock(&lockPlanStorage);
+  if (count != 0) return CUTT_INTERNAL_ERROR;
+#else
+  // Create new handle
+  *handle = curHandle;
+  curHandle++;
   // Check that the current handle is available (it better be!)
   if (planStorage.count(*handle) != 0) return CUTT_INTERNAL_ERROR;
+#endif
 
   // Prepare device
   int deviceID;
@@ -177,8 +220,15 @@ cuttResult cuttPlan(cuttHandle* handle, int rank, int* dim, int* permutation, si
     plan->nullDevicePointers();
   }
 
+#ifdef _OPENMP
+  omp_set_lock(&lockPlanStorage);
   // Insert plan into storage
   planStorage.insert( {*handle, plan} );
+  omp_unset_lock(&lockPlanStorage);
+#else
+  // Insert plan into storage
+  planStorage.insert( {*handle, plan} );
+#endif
 
 #ifdef ENABLE_NVTOOLS
   gpuRangeStop();
@@ -188,18 +238,38 @@ cuttResult cuttPlan(cuttHandle* handle, int rank, int* dim, int* permutation, si
 }
 
 cuttResult cuttActivatePlan(cuttHandle* newHandle, cuttHandle oldHandle, cudaStream_t stream, int deviceID) {
+#ifdef _OPENMP
+  omp_set_lock(&lockPlanStorage);
   cuttPlan_t* oldPlan = planStorage[oldHandle];
+  omp_unset_lock(&lockPlanStorage);
+#else
+  cuttPlan_t* oldPlan = planStorage[oldHandle];
+#endif
   cuttPlan_t* newPlan = new cuttPlan_t();
   *newPlan = *oldPlan;
 
+#ifdef _OPENMP
+  omp_set_lock(&lockCurHandle);
   *newHandle = curHandle;
   curHandle++;
+  omp_unset_lock(&lockCurHandle);
+#else
+  *newHandle = curHandle;
+  curHandle++;
+#endif
 
   newPlan->setStream(stream);
   newPlan->activate();
   newPlan->deviceID = deviceID;
 
+#ifdef _OPENMP
+  omp_set_lock(&lockPlanStorage);
   planStorage.insert( {*newHandle, newPlan} );
+  omp_unset_lock(&lockPlanStorage);
+#else
+  planStorage.insert( {*newHandle, newPlan} );
+#endif
+
   return CUTT_SUCCESS;
 }
 
@@ -212,12 +282,24 @@ cuttResult cuttPlanMeasure(cuttHandle* handle, int rank, int* dim, int* permutat
 
   if (idata == odata) return CUTT_INVALID_PARAMETER;
 
+#ifdef _OPENMP
+  omp_set_lock(&lockCurHandle);
   // Create new handle
   *handle = curHandle;
   curHandle++;
-
+  omp_unset_lock(&lockCurHandle);
+  // Check that the current handle is available (it better be!)
+  omp_set_lock(&lockPlanStorage);
+  size_t count = planStorage.count(*handle);
+  omp_unset_lock(&lockPlanStorage);
+  if (count != 0) return CUTT_INTERNAL_ERROR;
+#else
+  // Create new handle
+  *handle = curHandle;
+  curHandle++;
   // Check that the current handle is available (it better be!)
   if (planStorage.count(*handle) != 0) return CUTT_INTERNAL_ERROR;
+#endif
 
   // Prepare device
   int deviceID;
@@ -298,23 +380,47 @@ cuttResult cuttPlanMeasure(cuttHandle* handle, int rank, int* dim, int* permutat
   plan->activate();
 
   // Insert plan into storage
+#ifdef _OPENMP
+  omp_set_lock(&lockPlanStorage);
   planStorage.insert( {*handle, plan} );
+  omp_unset_lock(&lockPlanStorage);
+#else
+  planStorage.insert( {*handle, plan} );
+#endif
 
   return CUTT_SUCCESS;
 }
 
 cuttResult cuttDestroy(cuttHandle handle) {
+#ifdef _OPENMP
+  omp_set_lock(&lockPlanStorage);
   auto it = planStorage.find(handle);
+  omp_unset_lock(&lockPlanStorage);
+#else
+  auto it = planStorage.find(handle);
+#endif
   if (it == planStorage.end()) return CUTT_INVALID_PLAN;
   // Delete instance of cuttPlan_t
   delete it->second;
   // Delete entry from plan storage
+#ifdef _OPENMP
+  omp_set_lock(&lockPlanStorage);
   planStorage.erase(it);
+  omp_unset_lock(&lockPlanStorage);
+#else
+  planStorage.erase(it);
+#endif
   return CUTT_SUCCESS;
 }
 
 cuttResult cuttExecute(cuttHandle handle, void* idata, void* odata) {
+#ifdef _OPENMP
+  omp_set_lock(&lockPlanStorage);
   auto it = planStorage.find(handle);
+  omp_unset_lock(&lockPlanStorage);
+#else
+  auto it = planStorage.find(handle);
+#endif
   if (it == planStorage.end()) return CUTT_INVALID_PLAN;
 
   if (idata == odata) return CUTT_INVALID_PARAMETER;
