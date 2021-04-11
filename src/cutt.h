@@ -55,7 +55,9 @@ typedef enum cuttResult_t {
 // Success/unsuccess code
 // 
 cuttResult cuttPlan(cuttHandle* handle, int rank, int* dim, int* permutation, size_t sizeofType,
-  cudaStream_t stream);
+  cudaStream_t stream, bool activate = true);
+
+cuttResult cuttActivatePlan(cuttHandle* newHandle, cuttHandle oldHandle, cudaStream_t stream, int deviceID = 0); 
 
 //
 // Create plan and choose implementation by measuring performance

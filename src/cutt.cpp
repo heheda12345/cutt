@@ -82,7 +82,7 @@ cuttResult cuttPlanCheckInput(int rank, int* dim, int* permutation, size_t sizeo
 }
 
 cuttResult cuttPlan(cuttHandle* handle, int rank, int* dim, int* permutation, size_t sizeofType,
-  cudaStream_t stream) {
+  cudaStream_t stream, bool activate) {
 
 #ifdef ENABLE_NVTOOLS
   gpuRangeStart("init");
@@ -167,11 +167,15 @@ cuttResult cuttPlan(cuttHandle* handle, int rank, int* dim, int* permutation, si
   // that they won't be deallocated later when the object is destroyed
   bestPlan->nullDevicePointers();
 
-  // Set stream
-  plan->setStream(stream);
+  if (activate) {
+    // Set stream
+    plan->setStream(stream);
 
-  // Activate plan
-  plan->activate();
+    // Activate plan
+    plan->activate();
+  } else {
+    plan->nullDevicePointers();
+  }
 
   // Insert plan into storage
   planStorage.insert( {*handle, plan} );
@@ -180,6 +184,22 @@ cuttResult cuttPlan(cuttHandle* handle, int rank, int* dim, int* permutation, si
   gpuRangeStop();
 #endif
 
+  return CUTT_SUCCESS;
+}
+
+cuttResult cuttActivatePlan(cuttHandle* newHandle, cuttHandle oldHandle, cudaStream_t stream, int deviceID) {
+  cuttPlan_t* oldPlan = planStorage[oldHandle];
+  cuttPlan_t* newPlan = new cuttPlan_t();
+  *newPlan = *oldPlan;
+
+  *newHandle = curHandle;
+  curHandle++;
+
+  newPlan->setStream(stream);
+  newPlan->activate();
+  newPlan->deviceID = deviceID;
+
+  planStorage.insert( {*newHandle, newPlan} );
   return CUTT_SUCCESS;
 }
 
