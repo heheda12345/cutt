@@ -473,14 +473,14 @@ bool planExists(TensorSplit& ts, std::list<cuttPlan_t>& plans) {
 }
 
 bool cuttPlan_t::createTrivialPlans(const int rank, const int* dim, const int* permutation,
-  const size_t sizeofType, const int deviceID, const cudaDeviceProp& prop, std::list<cuttPlan_t>& plans) {
+  const size_t sizeofType, const int deviceID, const cudaDeviceProp& prop, std::list<cuttPlan_t>& plans OMP_TID_DECLARE) {
 
   if (rank == 1) {
     TensorSplit ts;
     ts.method = Trivial;
     ts.update(1, 1, rank, dim, permutation);    
     LaunchConfig lc;
-    int numActiveBlock = cuttKernelLaunchConfiguration(sizeofType, ts, deviceID, prop, lc);
+    int numActiveBlock = cuttKernelLaunchConfiguration(sizeofType, ts, deviceID, prop, lc OMP_TID_USE);
     if (numActiveBlock > 0 && !planExists(ts, plans)) {
       cuttPlan_t plan;
       if (!plan.setup(rank, dim, permutation, sizeofType, ts, lc, numActiveBlock)) return false;
@@ -492,14 +492,14 @@ bool cuttPlan_t::createTrivialPlans(const int rank, const int* dim, const int* p
 }
 
 bool cuttPlan_t::createTiledPlans(const int rank, const int* dim, const int* permutation,
-  const size_t sizeofType, const int deviceID, const cudaDeviceProp& prop, std::list<cuttPlan_t>& plans) {
+  const size_t sizeofType, const int deviceID, const cudaDeviceProp& prop, std::list<cuttPlan_t>& plans OMP_TID_DECLARE) {
 
   if (permutation[0] != 0 && rank > 1) {
     TensorSplit ts;
     ts.method = Tiled;
     ts.update(1, 1, rank, dim, permutation);    
     LaunchConfig lc;
-    int numActiveBlock = cuttKernelLaunchConfiguration(sizeofType, ts, deviceID, prop, lc);
+    int numActiveBlock = cuttKernelLaunchConfiguration(sizeofType, ts, deviceID, prop, lc OMP_TID_USE);
     if (numActiveBlock > 0 && !planExists(ts, plans)) {
       cuttPlan_t plan;
       if (!plan.setup(rank, dim, permutation, sizeofType, ts, lc, numActiveBlock)) return false;
@@ -511,7 +511,7 @@ bool cuttPlan_t::createTiledPlans(const int rank, const int* dim, const int* per
 }
 
 bool cuttPlan_t::createTiledCopyPlans(const int rank, const int* dim, const int* permutation,
-  const size_t sizeofType, const int deviceID, const cudaDeviceProp& prop, std::list<cuttPlan_t>& plans) {
+  const size_t sizeofType, const int deviceID, const cudaDeviceProp& prop, std::list<cuttPlan_t>& plans OMP_TID_DECLARE) {
 
   // Count number of Mm and Mk which are the same
   int numMmMkSame = 0;
@@ -528,7 +528,7 @@ bool cuttPlan_t::createTiledCopyPlans(const int rank, const int* dim, const int*
       ts.update(numMmMkSame - 1, numMmMkSame, rank, dim, permutation);      
     }
     LaunchConfig lc;
-    int numActiveBlock = cuttKernelLaunchConfiguration(sizeofType, ts, deviceID, prop, lc);
+    int numActiveBlock = cuttKernelLaunchConfiguration(sizeofType, ts, deviceID, prop, lc OMP_TID_USE);
     if (numActiveBlock > 0 && !planExists(ts, plans)) {
       cuttPlan_t plan;
       if (!plan.setup(rank, dim, permutation, sizeofType, ts, lc, numActiveBlock)) return false;
@@ -540,7 +540,7 @@ bool cuttPlan_t::createTiledCopyPlans(const int rank, const int* dim, const int*
 }
 
 bool cuttPlan_t::createPackedPlans(const int rank, const int* dim, const int* permutation,
-  const size_t sizeofType, const int deviceID, const cudaDeviceProp& prop, std::list<cuttPlan_t>& plans) {
+  const size_t sizeofType, const int deviceID, const cudaDeviceProp& prop, std::list<cuttPlan_t>& plans OMP_TID_DECLARE) {
 
   LaunchConfig lc;
   for (int numMm=1;numMm < rank;numMm++) {
@@ -548,7 +548,7 @@ bool cuttPlan_t::createPackedPlans(const int rank, const int* dim, const int* pe
       TensorSplit ts;
       ts.method = Packed;
       ts.update(numMm, numMk, rank, dim, permutation);
-      int numActiveBlock = cuttKernelLaunchConfiguration(sizeofType, ts, deviceID, prop, lc);
+      int numActiveBlock = cuttKernelLaunchConfiguration(sizeofType, ts, deviceID, prop, lc OMP_TID_USE);
       // Does not fit on the device, break out of inner loop
       if (numActiveBlock == 0) break;
       if (!planExists(ts, plans)) {
@@ -563,7 +563,7 @@ bool cuttPlan_t::createPackedPlans(const int rank, const int* dim, const int* pe
 }
 
 bool cuttPlan_t::createPackedSplitPlans(const int rank, const int* dim, const int* permutation,
-  const size_t sizeofType, const int deviceID, const cudaDeviceProp& prop, std::list<cuttPlan_t>& plans) {
+  const size_t sizeofType, const int deviceID, const cudaDeviceProp& prop, std::list<cuttPlan_t>& plans OMP_TID_DECLARE) {
 
   LaunchConfig lc;
   for (int numMm=1;numMm < rank;numMm++) {
@@ -612,7 +612,7 @@ bool cuttPlan_t::createPackedSplitPlans(const int rank, const int* dim, const in
         int numActiveBlock0, numActiveBlock1, numActiveBlock2;
         LaunchConfig lc0, lc1, lc2;
         for (ts.numSplit=minNumSplit;ts.numSplit <= maxNumSplit;ts.numSplit++) {
-          numActiveBlock = cuttKernelLaunchConfiguration(sizeofType, ts, deviceID, prop, lc);
+          numActiveBlock = cuttKernelLaunchConfiguration(sizeofType, ts, deviceID, prop, lc OMP_TID_USE);
           if (numActiveBlock != 0) {
             int volMmkUsed = ts.volMmkUsed();
             int val1 = volMmkUsed*numActiveBlock;
@@ -681,18 +681,20 @@ bool cuttPlan_t::createPackedSplitPlans(const int rank, const int* dim, const in
 bool cuttPlan_t::createPlans(const int rank, const int* dim, const int* permutation,
   const int rankRed, const int* dimRed, const int* permutationRed,
   const size_t sizeofType, const int deviceID, const cudaDeviceProp& prop, std::list<cuttPlan_t>& plans) {
-
+#ifdef _OPENMP
+  int tid = omp_get_thread_num();
+#endif
   size_t size0 = plans.size();
   /* if (!createTiledCopyPlans(rank, dim, permutation, sizeofType, deviceID, prop, plans)) return false;*/
-  if (!createTrivialPlans(rankRed, dimRed, permutationRed, sizeofType, deviceID, prop, plans)) return false;
+  if (!createTrivialPlans(rankRed, dimRed, permutationRed, sizeofType, deviceID, prop, plans OMP_TID_USE)) return false;
   // If Trivial plan was created, that's the only one we need
   if (size0 != plans.size()) return true;
-  if (!createTiledCopyPlans(rankRed, dimRed, permutationRed, sizeofType, deviceID, prop, plans)) return false;
-  if (!createTiledPlans(rankRed, dimRed, permutationRed, sizeofType, deviceID, prop, plans)) return false;
-  if (!createPackedPlans(rank, dim, permutation, sizeofType, deviceID, prop, plans)) return false;
-  if (!createPackedSplitPlans(rank, dim, permutation, sizeofType, deviceID, prop, plans)) return false;
+  if (!createTiledCopyPlans(rankRed, dimRed, permutationRed, sizeofType, deviceID, prop, plans OMP_TID_USE)) return false;
+  if (!createTiledPlans(rankRed, dimRed, permutationRed, sizeofType, deviceID, prop, plans OMP_TID_USE)) return false;
+  if (!createPackedPlans(rank, dim, permutation, sizeofType, deviceID, prop, plans OMP_TID_USE)) return false;
+  if (!createPackedSplitPlans(rank, dim, permutation, sizeofType, deviceID, prop, plans OMP_TID_USE)) return false;
   if (rank != rankRed) {
-    if (!createPackedSplitPlans(rankRed, dimRed, permutationRed, sizeofType, deviceID, prop, plans)) return false;
+    if (!createPackedSplitPlans(rankRed, dimRed, permutationRed, sizeofType, deviceID, prop, plans OMP_TID_USE)) return false;
   }
   return true;
 }

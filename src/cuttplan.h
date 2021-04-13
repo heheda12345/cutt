@@ -29,6 +29,7 @@ SOFTWARE.
 #include <vector>
 #include <cuda.h>
 #include "cuttTypes.h"
+#include "OmpUtils.h"
 
 const int TILEDIM = 32;
 const int TILEROWS = 8;
@@ -191,19 +192,19 @@ public:
 
 private:
   static bool createTrivialPlans(const int rank, const int* dim, const int* permutation,
-    const size_t sizeofType, const int deviceID, const cudaDeviceProp& prop, std::list<cuttPlan_t>& plans);
+    const size_t sizeofType, const int deviceID, const cudaDeviceProp& prop, std::list<cuttPlan_t>& plans OMP_TID_DECLARE);
 
   static bool createTiledPlans(const int rank, const int* dim, const int* permutation,
-    const size_t sizeofType, const int deviceID, const cudaDeviceProp& prop, std::list<cuttPlan_t>& plans);
+    const size_t sizeofType, const int deviceID, const cudaDeviceProp& prop, std::list<cuttPlan_t>& plans OMP_TID_DECLARE);
 
   static bool createTiledCopyPlans(const int rank, const int* dim, const int* permutation,
-    const size_t sizeofType, const int deviceID, const cudaDeviceProp& prop, std::list<cuttPlan_t>& plans);
+    const size_t sizeofType, const int deviceID, const cudaDeviceProp& prop, std::list<cuttPlan_t>& plans OMP_TID_DECLARE);
 
   static bool createPackedPlans(const int rank, const int* dim, const int* permutation,
-    const size_t sizeofType, const int deviceID, const cudaDeviceProp& prop, std::list<cuttPlan_t>& plans);
+    const size_t sizeofType, const int deviceID, const cudaDeviceProp& prop, std::list<cuttPlan_t>& plans OMP_TID_DECLARE);
 
   static bool createPackedSplitPlans(const int rank, const int* dim, const int* permutation,
-    const size_t sizeofType, const int deviceID, const cudaDeviceProp& prop, std::list<cuttPlan_t>& plans);
+    const size_t sizeofType, const int deviceID, const cudaDeviceProp& prop, std::list<cuttPlan_t>& plans OMP_TID_DECLARE);
 
   bool setup(const int rank_in, const int* dim, const int* permutation,
     const size_t sizeofType_in, const TensorSplit& tensorSplit_in,

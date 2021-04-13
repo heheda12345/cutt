@@ -91,6 +91,7 @@ OBJS = $(OBJSLIB) $(OBJSTEST) $(OBJSBENCH)
 CUDAROOT = $(subst /bin/,,$(dir $(shell which $(CUDAC))))
 
 OMP_FLAGS = -fopenmp
+CUDA_CCFLAGS = $(OMP_FLAGS)
 
 CFLAGS = -I${CUDAROOT}/include -std=c++11 $(DEFS) $(OPTLEV)
 ifeq ($(CPU),x86_64)

@@ -23,8 +23,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 *******************************************************************************/
 #include <cuda.h>
+#include <map>
 #include "CudaUtils.h"
-#include "LRUCache.h"
 #include "cuttkernel.h"
 
 #define RESTRICT __restrict__
@@ -548,17 +548,16 @@ void cuttKernelSetSharedMemConfig() {
 
 // Caches for PackedSplit kernels. One cache for all devices
 // NOTE: Not thread safe
-const int CACHE_SIZE = 100000;
 const int MAX_NUMWARP = (1024/32);
 const int MAX_NUMTYPE = 2;
 static int numDevices = -1;
-LRUCache<unsigned long long int, int> nabCache(CACHE_SIZE, -1);
+std::map<unsigned long long int, int> nabCache[100];
 
 //
 // Returns the maximum number of active blocks per SM
 //
 int getNumActiveBlock(const int method, const int sizeofType, const LaunchConfig& lc,
-  const int deviceID, const cudaDeviceProp& prop) {
+  const int deviceID, const cudaDeviceProp& prop OMP_TID_DECLARE) {
 
   int numActiveBlock;
   int numthread = lc.numthread.x * lc.numthread.y * lc.numthread.z;
@@ -604,9 +603,11 @@ int getNumActiveBlock(const int method, const int sizeofType, const LaunchConfig
       (unsigned long long int)key_type*MAX_NUMWARP*MAX_REG_STORAGE + 
       (unsigned long long int)key_reg*MAX_NUMWARP + 
       (unsigned long long int)key_warp;
-
-      numActiveBlock = nabCache.get(key);
-      if (numActiveBlock == -1) {
+#ifndef _OPENMP
+      int tid = 0;
+#endif
+      auto it = nabCache[tid].find(key);
+      if (it == nabCache[tid].end()) {
         // key not found in cache, determine value and add it to cache
 #define CALL0(TYPE, NREG) \
   cudaOccupancyMaxActiveBlocksPerMultiprocessor(&numActiveBlock, \
@@ -617,7 +618,9 @@ int getNumActiveBlock(const int method, const int sizeofType, const LaunchConfig
       }
 #undef CALL
 #undef CALL0
-        nabCache.set(key, numActiveBlock);
+        nabCache[tid][key] = numActiveBlock;
+      } else {
+        numActiveBlock = it->second;
       }
     }
     break;
@@ -669,7 +672,7 @@ int getNumActiveBlock(const int method, const int sizeofType, const LaunchConfig
 // lc.numRegStorage  (for Packed method)
 //
 int cuttKernelLaunchConfiguration(const int sizeofType, const TensorSplit& ts,
-  const int deviceID, const cudaDeviceProp& prop, LaunchConfig& lc) {
+  const int deviceID, const cudaDeviceProp& prop, LaunchConfig& lc OMP_TID_DECLARE) {
 
   // Return value of numActiveBlock
   int numActiveBlockReturn = -1;
@@ -728,7 +731,7 @@ int cuttKernelLaunchConfiguration(const int sizeofType, const TensorSplit& ts,
       for (lc.numRegStorage=minNumRegStorage;lc.numRegStorage <= maxNumRegStorage;lc.numRegStorage++) {
         lc.numthread.x = ((ts.volMmk - 1)/(prop.warpSize*lc.numRegStorage) + 1)*prop.warpSize;
 
-        int numActiveBlock = getNumActiveBlock(ts.method, sizeofType, lc, deviceID, prop);
+        int numActiveBlock = getNumActiveBlock(ts.method, sizeofType, lc, deviceID, prop OMP_TID_USE);
         // int val = numActiveBlock*lc.numthread.x;
         int val = ts.volMmkUsed()*numActiveBlock;
         if (val > bestVal) {
@@ -784,7 +787,7 @@ int cuttKernelLaunchConfiguration(const int sizeofType, const TensorSplit& ts,
       for (lc.numRegStorage=minNumRegStorage;lc.numRegStorage <= maxNumRegStorage;lc.numRegStorage++) {
         lc.numthread.x = ((volMmkWithSplit - 1)/(prop.warpSize*lc.numRegStorage) + 1)*prop.warpSize;
 
-        int numActiveBlock = getNumActiveBlock(ts.method, sizeofType, lc, deviceID, prop);
+        int numActiveBlock = getNumActiveBlock(ts.method, sizeofType, lc, deviceID, prop OMP_TID_USE);
         // int val = numActiveBlock*lc.numthread.x*lc.numRegStorage;
         int val = ts.volMmkUsed()*numActiveBlock;
         if (val > bestVal) {
@@ -838,7 +841,7 @@ int cuttKernelLaunchConfiguration(const int sizeofType, const TensorSplit& ts,
   // Return the number of active blocks with these settings
   if (numActiveBlockReturn == -1) {
     // Not set, get it
-    numActiveBlockReturn = getNumActiveBlock(ts.method, sizeofType, lc, deviceID, prop);
+    numActiveBlockReturn = getNumActiveBlock(ts.method, sizeofType, lc, deviceID, prop OMP_TID_USE);
   }
   return numActiveBlockReturn;
 }

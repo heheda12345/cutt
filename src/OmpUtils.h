@@ -22,16 +22,15 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 *******************************************************************************/
-#ifndef CUTTKERNEL_H
-#define CUTTKERNEL_H
-#include "cuttplan.h"
-#include "OmpUtils.h"
+#ifndef OMPUTILS_H
+#define OMPUTILS_H
+#ifdef _OPENMP
+#include <omp.h>
+#define OMP_TID_DECLARE ,int tid
+#define OMP_TID_USE , tid
+#else
+#define OMP_TID_DECLARE
+#define OMP_TID_USE
+#endif
 
-void cuttKernelSetSharedMemConfig();
-
-int cuttKernelLaunchConfiguration(const int sizeofType, const TensorSplit& ts,
-	const int deviceID, const cudaDeviceProp& prop, LaunchConfig& lc OMP_TID_DECLARE);
-
-bool cuttKernel(cuttPlan_t& plan, void* dataIn, void* dataOut);
-
-#endif // CUTTKERNEL_H
+#endif // OMPUTILS_H
